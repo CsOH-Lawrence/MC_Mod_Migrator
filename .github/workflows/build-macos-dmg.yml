@@ -1,0 +1,74 @@
+name: Build macOS DMG
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} DMG
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Package DMG
+        run: |
+          chmod +x scripts/package-macos.sh
+          ./scripts/package-macos.sh ${{ matrix.arch }}
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: mc-mod-migrator-macos-${{ matrix.arch }}
+          path: dist/MC Mod Migrator-macos-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows ZIP
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Compile and package
+        shell: pwsh
+        run: |
+          Set-Location native-windows
+          cmd /c build.bat
+          Set-Location ..
+          New-Item -ItemType Directory -Force -Path release/logs | Out-Null
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -LiteralPath release -DestinationPath "dist/MC Mod Migrator Windows.zip" -CompressionLevel Optimal
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: mc-mod-migrator-windows
+          path: dist/MC Mod Migrator Windows.zip
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish tagged release
+    if: github.ref_type == 'tag'
+    needs: [build, build-windows]
+    runs-on: macos-14
+    steps:
+      - name: Download DMGs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mc-mod-migrator-*
+          merge-multiple: true
+          path: release
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* --title "$GITHUB_REF_NAME" --generate-notes

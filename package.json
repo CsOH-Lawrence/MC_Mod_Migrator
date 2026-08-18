@@ -1,0 +1,10 @@
+{
+  "name": "mc-mod-migrator",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron-main.js",
+  "description": "Local Minecraft mod migration assistant",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

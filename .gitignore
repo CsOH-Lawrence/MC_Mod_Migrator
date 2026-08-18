@@ -1,0 +1,10 @@
+# Generated release files and runtime logs
+dist/
+release/
+logs/
+node_modules/
+*.migrator-backup
+
+# OS and editor files
+.DS_Store
+Thumbs.db
