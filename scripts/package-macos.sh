@@ -13,10 +13,31 @@ APP_NAME="MC Mod Migrator"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+download_with_retry() {
+  local target="$1"
+  local url="$2"
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if curl --fail --location --silent --show-error -o "$target" "$url"; then
+      return 0
+    fi
+    rm -f "$target"
+    echo "Download attempt $attempt failed; retrying..."
+    sleep $((attempt * 2))
+  done
+  return 1
+}
+
 release_json="$TMP/electron-release.json"
-curl --fail --location --silent --show-error \
-  -H 'User-Agent: MC-Mod-Migrator-Packager' \
-  -o "$release_json" https://api.github.com/repos/electron/electron/releases/latest
+for attempt in 1 2 3 4 5; do
+  if curl --fail --location --silent --show-error -H 'User-Agent: MC-Mod-Migrator-Packager' -o "$release_json" https://api.github.com/repos/electron/electron/releases/latest; then
+    break
+  fi
+  rm -f "$release_json"
+  if [[ "$attempt" == 5 ]]; then exit 1; fi
+  echo "Release metadata download failed; retrying..."
+  sleep $((attempt * 2))
+done
 archive_url="$(grep -oE 'https://[^" ]+electron-v[^" ]+-darwin-'"$ARCH"'\.zip' "$release_json" | head -n 1)"
 if [[ -z "$archive_url" ]]; then
   echo "Could not find Electron runtime for darwin/$ARCH."
@@ -24,7 +45,7 @@ if [[ -z "$archive_url" ]]; then
 fi
 
 archive="$TMP/electron.zip"
-curl --fail --location --silent --show-error -o "$archive" "$archive_url"
+download_with_retry "$archive" "$archive_url"
 unzip -q "$archive" -d "$TMP/runtime"
 SOURCE_APP="$(find "$TMP/runtime" -maxdepth 2 -type d -name Electron.app -print -quit)"
 if [[ -z "$SOURCE_APP" ]]; then
